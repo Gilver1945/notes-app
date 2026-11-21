@@ -1,5 +1,7 @@
+
 import { useEffect, useState } from 'react';
 import { api } from './api';
+import DOMPurify from 'dompurify';
 
 export default function App() {
   const [user, setUser] = useState(localStorage.getItem('username'));
@@ -22,11 +24,17 @@ export default function App() {
         <h1>📝 Notițe</h1>
         {user && (
           <div>
-            Salut, <strong>{user}</strong> <button onClick={logout}>Ieșire</button>
+            Salut, <strong>{user}</strong>{' '}
+            <button onClick={logout}>Ieșire</button>
           </div>
         )}
       </header>
-      {user ? <Notes onAuthError={logout} /> : <AuthForm onLogin={onLogin} />}
+
+      {user ? (
+        <Notes onAuthError={logout} />
+      ) : (
+        <AuthForm onLogin={onLogin} />
+      )}
     </main>
   );
 }
@@ -40,8 +48,14 @@ function AuthForm({ onLogin }) {
   async function submit(e) {
     e.preventDefault();
     setError('');
+
     try {
-      onLogin(await api('/auth/' + mode, { method: 'POST', body: { username, password } }));
+      onLogin(
+        await api('/auth/' + mode, {
+          method: 'POST',
+          body: { username, password },
+        }),
+      );
     } catch (err) {
       setError(err.message);
     }
@@ -49,14 +63,40 @@ function AuthForm({ onLogin }) {
 
   return (
     <form className="card" onSubmit={submit}>
-      <h2>{mode === 'login' ? 'Autentificare' : 'Cont nou'}</h2>
-      <input placeholder="Utilizator" value={username} onChange={(e) => setUsername(e.target.value)} />
-      <input placeholder="Parolă" type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
+      <h2>
+        {mode === 'login' ? 'Autentificare' : 'Cont nou'}
+      </h2>
+
+      <input
+        placeholder="Utilizator"
+        value={username}
+        onChange={(e) => setUsername(e.target.value)}
+      />
+
+      <input
+        placeholder="Parolă"
+        type="password"
+        value={password}
+        onChange={(e) => setPassword(e.target.value)}
+      />
+
       {error && <p className="error">{error}</p>}
-      <button type="submit">{mode === 'login' ? 'Intră' : 'Creează contul'}</button>
+
+      <button type="submit">
+        {mode === 'login' ? 'Intră' : 'Creează contul'}
+      </button>
+
       <p>
-        <a href="#" onClick={() => setMode(mode === 'login' ? 'register' : 'login')}>
-          {mode === 'login' ? 'Nu ai cont? Creează unul' : 'Ai deja cont? Autentifică-te'}
+        <a
+          href="#"
+          onClick={(e) => {
+            e.preventDefault();
+            setMode(mode === 'login' ? 'register' : 'login');
+          }}
+        >
+          {mode === 'login'
+            ? 'Nu ai cont? Creează unul'
+            : 'Ai deja cont? Autentifică-te'}
         </a>
       </p>
     </form>
@@ -71,11 +111,19 @@ function Notes({ onAuthError }) {
 
   async function load() {
     setError('');
+
     try {
-      const path = tab === 'mine' ? '/notes?search=' + encodeURIComponent(search) : '/notes/public';
+      const path =
+        tab === 'mine'
+          ? '/notes?search=' + encodeURIComponent(search)
+          : '/notes/public';
+
       setNotes(await api(path));
     } catch (err) {
-      if (err.message.includes('autentificat')) onAuthError();
+      if (err.message.includes('autentificat')) {
+        onAuthError();
+      }
+
       setError(err.message);
     }
   }
@@ -92,15 +140,38 @@ function Notes({ onAuthError }) {
   return (
     <>
       <nav>
-        <button className={tab === 'mine' ? 'active' : ''} onClick={() => setTab('mine')}>Notițele mele</button>
-        <button className={tab === 'public' ? 'active' : ''} onClick={() => setTab('public')}>Notițe publice</button>
+        <button
+          className={tab === 'mine' ? 'active' : ''}
+          onClick={() => setTab('mine')}
+        >
+          Notițele mele
+        </button>
+
+        <button
+          className={tab === 'public' ? 'active' : ''}
+          onClick={() => setTab('public')}
+        >
+          Notițe publice
+        </button>
       </nav>
 
       {tab === 'mine' && (
         <>
           <NewNote onCreated={load} />
-          <form className="search" onSubmit={(e) => { e.preventDefault(); load(); }}>
-            <input placeholder="Caută după titlu..." value={search} onChange={(e) => setSearch(e.target.value)} />
+
+          <form
+            className="search"
+            onSubmit={(e) => {
+              e.preventDefault();
+              load();
+            }}
+          >
+            <input
+              placeholder="Caută după titlu sau conținut..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+
             <button type="submit">Caută</button>
           </form>
         </>
@@ -111,10 +182,26 @@ function Notes({ onAuthError }) {
       {notes.map((note) => (
         <article className="card" key={note.id}>
           <h3>{note.title}</h3>
-          {note.username && <small>de {note.username}</small>}
-          {/* Permitem formatare HTML în notițe (bold, italic...) */}
-          <div dangerouslySetInnerHTML={{ __html: note.content }} />
-          {tab === 'mine' && <button onClick={() => remove(note.id)}>Șterge</button>}
+
+          {note.username && (
+            <small>de {note.username}</small>
+          )}
+
+          {/* Varianta 3: permitem doar strong si em */}
+          <div
+            dangerouslySetInnerHTML={{
+              __html: DOMPurify.sanitize(note.content, {
+                ALLOWED_TAGS: ['strong', 'em'],
+                ALLOWED_ATTR: [],
+              }),
+            }}
+          />
+
+          {tab === 'mine' && (
+            <button onClick={() => remove(note.id)}>
+              Șterge
+            </button>
+          )}
         </article>
       ))}
     </>
@@ -128,21 +215,44 @@ function NewNote({ onCreated }) {
 
   async function submit(e) {
     e.preventDefault();
-    await api('/notes', { method: 'POST', body: { title, content, isPublic } });
+
+    await api('/notes', {
+      method: 'POST',
+      body: { title, content, isPublic },
+    });
+
     setTitle('');
     setContent('');
     setIsPublic(false);
+
     onCreated();
   }
 
   return (
     <form className="card" onSubmit={submit}>
       <h2>Notiță nouă</h2>
-      <input placeholder="Titlu" value={title} onChange={(e) => setTitle(e.target.value)} />
-      <textarea placeholder="Conținut (poți folosi <b>, <i>)" value={content} onChange={(e) => setContent(e.target.value)} />
+
+      <input
+        placeholder="Titlu"
+        value={title}
+        onChange={(e) => setTitle(e.target.value)}
+      />
+
+      <textarea
+        placeholder="Conținut (poți folosi <strong>, <em>)"
+        value={content}
+        onChange={(e) => setContent(e.target.value)}
+      />
+
       <label>
-        <input type="checkbox" checked={isPublic} onChange={(e) => setIsPublic(e.target.checked)} /> Publică (o văd toți)
+        <input
+          type="checkbox"
+          checked={isPublic}
+          onChange={(e) => setIsPublic(e.target.checked)}
+        />
+        {' '}Publică (o văd toți)
       </label>
+
       <button type="submit">Salvează</button>
     </form>
   );
